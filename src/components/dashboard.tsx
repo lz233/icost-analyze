@@ -174,22 +174,24 @@ export function Dashboard() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[#ebebeb] bg-white px-4 md:px-6">
+        <header className="flex h-14 shrink-0 flex-nowrap items-center gap-2 overflow-hidden border-b border-[#ebebeb] bg-white px-3 md:gap-3 md:px-6">
           <button
             type="button"
-            className="grid h-8 w-8 place-items-center rounded-md border border-[#ebebeb] md:hidden"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-[#ebebeb] md:hidden"
             aria-label="打开菜单"
             onClick={() => setNavOpen(true)}
           >
             <MenuIcon />
           </button>
-          <h1 className="text-sm font-medium">{currentNav.label}</h1>
-          <div className="ml-auto flex items-center gap-2">
+          <h1 className="min-w-0 flex-1 truncate whitespace-nowrap text-sm font-medium">
+            {currentNav.label}
+          </h1>
+          <div className="flex shrink-0 items-center gap-2">
             {nav === "stats" && months.length > 0 ? (
-              <div className="flex h-8 items-center rounded-md border border-[#ebebeb] bg-white">
+              <div className="flex h-8 shrink-0 items-center rounded-md border border-[#ebebeb] bg-white">
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center text-[#444] hover:bg-[#fafafa] disabled:cursor-default disabled:text-[#ccc] disabled:hover:bg-transparent"
+                  className="grid h-8 w-7 shrink-0 place-items-center text-[#444] hover:bg-[#fafafa] disabled:cursor-default disabled:text-[#ccc] disabled:hover:bg-transparent"
                   aria-label="上个月"
                   disabled={monthIndex <= 0}
                   onClick={() => selectMonth(months[monthIndex - 1] ?? activeMonth)}
@@ -201,7 +203,7 @@ export function Dashboard() {
                 </label>
                 <select
                   id="month"
-                  className="h-8 max-w-32 appearance-none bg-transparent px-1 text-sm font-medium outline-none"
+                  className="h-8 w-[6.25rem] shrink-0 appearance-none bg-transparent text-center text-sm font-medium whitespace-nowrap outline-none"
                   value={activeMonth}
                   onChange={(event) => selectMonth(event.target.value)}
                 >
@@ -213,7 +215,7 @@ export function Dashboard() {
                 </select>
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center text-[#444] hover:bg-[#fafafa] disabled:cursor-default disabled:text-[#ccc] disabled:hover:bg-transparent"
+                  className="grid h-8 w-7 shrink-0 place-items-center text-[#444] hover:bg-[#fafafa] disabled:cursor-default disabled:text-[#ccc] disabled:hover:bg-transparent"
                   aria-label="下个月"
                   disabled={monthIndex < 0 || monthIndex >= months.length - 1}
                   onClick={() => selectMonth(months[monthIndex + 1] ?? activeMonth)}
@@ -225,10 +227,12 @@ export function Dashboard() {
             {rows ? (
               <button
                 type="button"
-                className="h-8 rounded-md border border-[#ebebeb] px-3 text-sm hover:bg-[#fafafa]"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-[#ebebeb] text-sm whitespace-nowrap hover:bg-[#fafafa] sm:w-auto sm:px-3"
+                aria-label="更换文件"
                 onClick={openFilePicker}
               >
-                更换文件
+                <ReplaceIcon />
+                <span className="hidden sm:inline">更换文件</span>
               </button>
             ) : null}
           </div>
@@ -526,6 +530,33 @@ function formatTxnDate(date: string): string {
   if (!match) return date;
   const day = `${Number(match[2])}/${Number(match[3])}`;
   return match[4] ? `${day} ${match[4]}` : day;
+}
+
+function ReplaceIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className="sm:hidden"
+    >
+      <path
+        d="M3 8.5h7.5M8.5 5.5 11.5 8.5 8.5 11.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 4.5v7"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 function MenuIcon() {
