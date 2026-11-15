@@ -3,10 +3,13 @@
 import { useMemo, useRef, useState } from "react";
 import {
   countMonth,
+  discountLines,
   formatCents,
   formatMonth,
+  formatRate,
   listMonths,
   parseBillFile,
+  summarizeCreditCards,
   summarizeMonth,
   totalCents,
   type BillRow,
@@ -28,6 +31,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [openCurrencies, setOpenCurrencies] = useState<string[]>([]);
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -35,6 +39,10 @@ export function Dashboard() {
   const activeMonth = months.includes(month) ? month : (months.at(-1) ?? "");
   const breakdown = useMemo(
     () => (rows && activeMonth ? summarizeMonth(rows, activeMonth) : []),
+    [rows, activeMonth],
+  );
+  const cardRates = useMemo(
+    () => (rows && activeMonth ? summarizeCreditCards(rows, activeMonth) : []),
     [rows, activeMonth],
   );
   const monthCount = rows && activeMonth ? countMonth(rows, activeMonth) : 0;
@@ -50,6 +58,7 @@ export function Dashboard() {
       setRows(nextRows);
       setFileName(file.name);
       setMonth(nextMonths.at(-1) ?? "");
+      setOpenCurrencies([]);
       setNav("stats");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "无法读取这个文件");
@@ -62,10 +71,16 @@ export function Dashboard() {
     fileInput.current?.click();
   }
 
+  function selectMonth(nextMonth: string) {
+    setMonth(nextMonth);
+    setOpenCurrencies([]);
+  }
+
   function clearBill() {
     setRows(null);
     setFileName("");
     setMonth("");
+    setOpenCurrencies([]);
     setError(null);
   }
 
@@ -177,7 +192,7 @@ export function Dashboard() {
                   className="grid h-8 w-8 place-items-center text-[#444] hover:bg-[#fafafa] disabled:cursor-default disabled:text-[#ccc] disabled:hover:bg-transparent"
                   aria-label="上个月"
                   disabled={monthIndex <= 0}
-                  onClick={() => setMonth(months[monthIndex - 1] ?? activeMonth)}
+                  onClick={() => selectMonth(months[monthIndex - 1] ?? activeMonth)}
                 >
                   <Chevron direction="left" />
                 </button>
@@ -188,7 +203,7 @@ export function Dashboard() {
                   id="month"
                   className="h-8 max-w-32 appearance-none bg-transparent px-1 text-sm font-medium outline-none"
                   value={activeMonth}
-                  onChange={(event) => setMonth(event.target.value)}
+                  onChange={(event) => selectMonth(event.target.value)}
                 >
                   {months.map((item) => (
                     <option key={item} value={item}>
@@ -201,7 +216,7 @@ export function Dashboard() {
                   className="grid h-8 w-8 place-items-center text-[#444] hover:bg-[#fafafa] disabled:cursor-default disabled:text-[#ccc] disabled:hover:bg-transparent"
                   aria-label="下个月"
                   disabled={monthIndex < 0 || monthIndex >= months.length - 1}
-                  onClick={() => setMonth(months[monthIndex + 1] ?? activeMonth)}
+                  onClick={() => selectMonth(months[monthIndex + 1] ?? activeMonth)}
                 >
                   <Chevron direction="right" />
                 </button>
@@ -254,28 +269,135 @@ export function Dashboard() {
                   <p className="px-5 py-8 text-sm text-[#666]">这个月没有记录</p>
                 ) : (
                   <ul>
-                    {breakdown.map((item) => (
-                      <li key={item.currency} className="border-b border-[#f2f2f2] px-5 py-4 last:border-0">
-                        <div className="flex items-baseline justify-between gap-4">
-                          <span className="text-sm font-medium">{item.currency}</span>
-                          <span className="text-2xl font-semibold tracking-tight tabular-nums">
-                            {formatCents(totalCents(item))}
-                          </span>
+                    {breakdown.map((item) => {
+                      const open = openCurrencies.includes(item.currency);
+                      const lines =
+                        rows && activeMonth
+                          ? discountLines(rows, activeMonth, item.currency)
+                          : [];
+                      return (
+                        <li key={item.currency} className="border-b border-[#f2f2f2] last:border-0">
+                          <button
+                            type="button"
+                            className="w-full px-5 py-4 text-left hover:bg-[#fafafa]"
+                            aria-expanded={open}
+                            onClick={() =>
+                              setOpenCurrencies((current) =>
+                                current.includes(item.currency)
+                                  ? current.filter((currency) => currency !== item.currency)
+                                  : [...current, item.currency],
+                              )
+                            }
+                          >
+                            <div className="flex items-baseline justify-between gap-4">
+                              <span className="flex items-center gap-2 text-sm font-medium">
+                                <span className={`text-[#888] ${open ? "rotate-90" : ""}`}>
+                                  <Chevron direction="right" />
+                                </span>
+                                {item.currency}
+                              </span>
+                              <span className="text-2xl font-semibold tracking-tight tabular-nums">
+                                {formatCents(totalCents(item))}
+                              </span>
+                            </div>
+                            <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                              <div>
+                                <dt className="text-xs text-[#888]">优惠</dt>
+                                <dd className="mt-1 tabular-nums">{formatCents(item.discountCents)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-xs text-[#888]">意外收入</dt>
+                                <dd className="mt-1 tabular-nums">{formatCents(item.windfallCents)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-xs text-[#888]">付费卡券</dt>
+                                <dd className="mt-1 tabular-nums">{formatCents(item.couponCents)}</dd>
+                              </div>
+                            </dl>
+                          </button>
+                          {open ? (
+                            lines.length === 0 ? (
+                              <p className="border-t border-[#f2f2f2] px-5 py-4 text-sm text-[#666]">
+                                这个月没有可列出的交易
+                              </p>
+                            ) : (
+                              <ul className="border-t border-[#f2f2f2] bg-[#fafafa]">
+                                {lines.map((line, index) => (
+                                  <li
+                                    key={`${line.date}-${line.kind}-${index}`}
+                                    className="flex items-start justify-between gap-4 border-b border-[#f2f2f2] px-5 py-3 last:border-0"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-sm">
+                                        {formatTxnDate(line.date)}
+                                        <span className="text-[#888]">
+                                          {" "}
+                                          · {lineLabel(line)}
+                                        </span>
+                                      </p>
+                                      {line.remark || line.account ? (
+                                        <p className="mt-1 truncate text-xs text-[#888]">
+                                          {[line.remark, line.account].filter(Boolean).join(" · ")}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                      <p className="text-sm font-medium tabular-nums">
+                                        {formatCents(line.sortCents)}
+                                      </p>
+                                      <p className="mt-1 text-xs text-[#888]">
+                                        {line.kind === "windfall" ? "金额" : "优惠"}
+                                      </p>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </article>
+              <article className="mt-4 rounded-lg border border-[#ebebeb] bg-white">
+                <div className="border-b border-[#ebebeb] px-5 py-4">
+                  <h3 className="text-sm font-medium">信用卡优惠率</h3>
+                  <p className="mt-1 text-sm text-[#666]">
+                    （支出优惠 + 意外收入 + 还款优惠）/ 支出金额，次行是还款优惠 / 支出金额
+                  </p>
+                </div>
+                {cardRates.length === 0 ? (
+                  <p className="px-5 py-8 text-sm text-[#666]">这个月没有信用卡支出</p>
+                ) : (
+                  <ul>
+                    {cardRates.map((card) => (
+                      <li key={card.account} className="border-b border-[#f2f2f2] px-5 py-4 last:border-0">
+                        <p className="text-sm font-medium">{card.account}</p>
+                        <div className="mt-3 space-y-4">
+                          {card.currencies.map((item) => {
+                            const combined =
+                              item.expenseDiscountCents +
+                              item.windfallCents +
+                              item.repaymentDiscountCents;
+                            return (
+                              <div key={item.currency}>
+                                <div className="flex items-baseline justify-between gap-4">
+                                  <span className="text-sm text-[#444]">{item.currency}</span>
+                                  <span className="text-2xl font-semibold tracking-tight tabular-nums">
+                                    {formatRate(combined, item.spendCents)}
+                                  </span>
+                                </div>
+                                <div className="mt-1 flex items-baseline justify-between gap-4 text-sm text-[#666]">
+                                  <span>还款优惠率</span>
+                                  <span className="tabular-nums">
+                                    {formatRate(item.repaymentDiscountCents, item.spendCents)}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
-                          <div>
-                            <dt className="text-xs text-[#888]">优惠</dt>
-                            <dd className="mt-1 tabular-nums">{formatCents(item.discountCents)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-[#888]">意外收入</dt>
-                            <dd className="mt-1 tabular-nums">{formatCents(item.windfallCents)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-[#888]">付费卡券</dt>
-                            <dd className="mt-1 tabular-nums">{formatCents(item.couponCents)}</dd>
-                          </div>
-                        </dl>
                       </li>
                     ))}
                   </ul>
@@ -390,6 +512,20 @@ function SettingsIcon() {
       <circle cx="10.5" cy="11.75" r="1.75" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
+}
+
+function lineLabel(line: { kind: string; category: string }): string {
+  if (line.kind === "windfall") return "意外收入";
+  if (line.kind === "transfer") return "转账";
+  if (line.kind === "repayment") return "还款";
+  return line.category || "支出";
+}
+
+function formatTxnDate(date: string): string {
+  const match = date.trim().match(/^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})(?:\s+(\d{1,2}:\d{2}))?/);
+  if (!match) return date;
+  const day = `${Number(match[2])}/${Number(match[3])}`;
+  return match[4] ? `${day} ${match[4]}` : day;
 }
 
 function MenuIcon() {

@@ -3,8 +3,11 @@ export type BillRow = {
   type: string;
   amountCents: number;
   category: string;
+  account: string;
+  counterAccount: string;
   currency: string;
   discountCents: number;
+  remark: string;
 };
 
 export type CurrencyBreakdown = {
@@ -12,6 +15,31 @@ export type CurrencyBreakdown = {
   discountCents: number;
   windfallCents: number;
   couponCents: number;
+};
+
+export type CardCurrencyRate = {
+  currency: string;
+  spendCents: number;
+  expenseDiscountCents: number;
+  windfallCents: number;
+  repaymentDiscountCents: number;
+};
+
+export type CardRate = {
+  account: string;
+  currencies: CardCurrencyRate[];
+};
+
+export type DiscountLine = {
+  date: string;
+  type: string;
+  category: string;
+  remark: string;
+  account: string;
+  amountCents: number;
+  discountCents: number;
+  sortCents: number;
+  kind: "expense" | "windfall" | "transfer" | "repayment";
 };
 
 const CURRENCY_ORDER = ["CNY", "HKD", "USD", "MOP", "TRY"];
@@ -48,6 +76,20 @@ export function totalCents(item: CurrencyBreakdown): number {
   return item.discountCents + item.windfallCents - item.couponCents;
 }
 
+export function formatRate(partCents: number, spendCents: number): string {
+  if (spendCents === 0) return "—";
+  return `${((partCents / spendCents) * 100).toFixed(2)}%`;
+}
+
+function compareCurrency(left: string, right: string): number {
+  const leftIndex = CURRENCY_ORDER.indexOf(left);
+  const rightIndex = CURRENCY_ORDER.indexOf(right);
+  if (leftIndex !== -1 || rightIndex !== -1) {
+    return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
+  }
+  return left.localeCompare(right, "zh-CN");
+}
+
 export function listMonths(rows: BillRow[]): string[] {
   return [...new Set(rows.map((row) => monthKey(row.date)))].sort();
 }
@@ -76,14 +118,80 @@ export function summarizeMonth(rows: BillRow[], month: string): CurrencyBreakdow
     totals.set(row.currency, current);
   }
 
-  return [...totals.values()].sort((left, right) => {
-    const leftIndex = CURRENCY_ORDER.indexOf(left.currency);
-    const rightIndex = CURRENCY_ORDER.indexOf(right.currency);
-    if (leftIndex !== -1 || rightIndex !== -1) {
-      return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
-    }
-    return left.currency.localeCompare(right.currency, "zh-CN");
-  });
+  return [...totals.values()].sort((left, right) =>
+    compareCurrency(left.currency, right.currency),
+  );
+}
+
+export function discountLines(rows: BillRow[], month: string, currency: string): DiscountLine[] {
+  const lines: DiscountLine[] = [];
+  for (const row of rows) {
+    if (monthKey(row.date) !== month || row.currency !== currency) continue;
+    const windfall = row.type === "收入" && row.category === "意外收入";
+    const expense = row.type === "支出";
+    const transfer = row.type === "转账";
+    const repayment = row.type === "还款";
+    if (!windfall && !expense && !transfer && !repayment) continue;
+    const kind = windfall ? "windfall" : transfer ? "transfer" : repayment ? "repayment" : "expense";
+    lines.push({
+      date: row.date,
+      type: row.type,
+      category: row.category,
+      remark: row.remark,
+      account: row.account,
+      amountCents: row.amountCents,
+      discountCents: row.discountCents,
+      sortCents: windfall ? row.amountCents : row.discountCents,
+      kind,
+    });
+  }
+  return lines.sort(
+    (left, right) => right.sortCents - left.sortCents || right.date.localeCompare(left.date),
+  );
+}
+
+export function summarizeCreditCards(rows: BillRow[], month: string): CardRate[] {
+  const monthRows = rows.filter((row) => monthKey(row.date) === month);
+  const cards = new Map<string, Map<string, CardCurrencyRate>>();
+
+  for (const row of monthRows) {
+    if (row.type !== "支出" || !row.account.includes("信用卡")) continue;
+    const byCurrency = cards.get(row.account) ?? new Map<string, CardCurrencyRate>();
+    const current = byCurrency.get(row.currency) ?? {
+      currency: row.currency,
+      spendCents: 0,
+      expenseDiscountCents: 0,
+      windfallCents: 0,
+      repaymentDiscountCents: 0,
+    };
+    current.spendCents += row.amountCents;
+    current.expenseDiscountCents += row.discountCents;
+    byCurrency.set(row.currency, current);
+    cards.set(row.account, byCurrency);
+  }
+
+  for (const row of monthRows) {
+    if (row.type !== "收入" || row.category !== "意外收入") continue;
+    const current = cards.get(row.account)?.get(row.currency);
+    if (!current) continue;
+    current.windfallCents += row.amountCents;
+  }
+
+  for (const row of monthRows) {
+    if (row.type !== "还款") continue;
+    const current = cards.get(row.counterAccount)?.get(row.currency);
+    if (!current) continue;
+    current.repaymentDiscountCents += row.discountCents;
+  }
+
+  return [...cards.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, "zh-CN"))
+    .map(([account, byCurrency]) => ({
+      account,
+      currencies: [...byCurrency.values()]
+        .map((item) => ({ ...item, spendCents: Math.abs(item.spendCents) }))
+        .sort((left, right) => compareCurrency(left.currency, right.currency)),
+    }));
 }
 
 export async function parseBillFile(file: File): Promise<BillRow[]> {
@@ -104,7 +212,7 @@ export async function parseBillFile(file: File): Promise<BillRow[]> {
   });
   if (rows.length === 0) throw new Error("表格是空的");
 
-  const required = ["日期", "类型", "金额", "一级分类", "货币", "优惠"];
+  const required = ["日期", "类型", "金额", "一级分类", "账户1", "账户2", "货币", "优惠"];
   const missing = required.filter((key) => !(key in rows[0]));
   if (missing.length > 0) {
     throw new Error(`缺少列：${missing.join("、")}`);
@@ -115,7 +223,10 @@ export async function parseBillFile(file: File): Promise<BillRow[]> {
     type: String(row["类型"] ?? "").trim(),
     amountCents: moneyToCents(row["金额"]),
     category: String(row["一级分类"] ?? "").trim(),
+    account: String(row["账户1"] ?? "").trim(),
+    counterAccount: String(row["账户2"] ?? "").trim(),
     currency: String(row["货币"] ?? "").trim() || "(空)",
     discountCents: moneyToCents(row["优惠"]),
+    remark: String(row["备注"] ?? "").trim(),
   }));
 }
