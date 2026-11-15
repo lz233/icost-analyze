@@ -145,7 +145,8 @@ export function discountLines(rows: BillRow[], month: string, currency: string):
       kind,
     });
   }
-  return lines.sort(
+  const visible = lines.filter((line) => line.sortCents !== 0);
+  return visible.sort(
     (left, right) => right.sortCents - left.sortCents || right.date.localeCompare(left.date),
   );
 }
