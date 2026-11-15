@@ -2,6 +2,7 @@
 
 :root {
   --background: #ffffff;
+  --app-background: #ffffff;
   --foreground: #171717;
   --muted: #666666;
   --line: #ebebeb;
@@ -26,4 +27,22 @@ button,
 select,
 input {
   font: inherit;
+}
+
+.pwa-status-strip {
+  display: none;
+}
+
+@media (display-mode: standalone) {
+  .pwa-status-strip {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 11px;
+    background-color: var(--app-background);
+    pointer-events: none;
+    z-index: 1000;
+  }
 }
