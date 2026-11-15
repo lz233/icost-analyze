@@ -1,5 +1,5 @@
 {
-  "name": "web",
+  "name": "icost-analyze",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,8 @@
   "dependencies": {
     "next": "16.4.6",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",

@@ -1,36 +1,27 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# iCost Analyze
 
-## Getting Started
+把 iCost 导出的账单拖进网页，按月份查看各货币的优惠金额。
 
-First, run the development server:
+## 开发
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 http://localhost:3000，把 `.xlsx` 或 `.csv` 拖到页面上。表格需要包含这些列：日期、类型、金额、一级分类、货币、优惠。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 优惠金额
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+每种货币分开计算：
 
-## Learn More
+- 加上「优惠」列的金额，但排除类型为「支出」且一级分类为「付费卡券」的交易
+- 加上类型为「收入」且一级分类为「意外收入」的金额
+- 减去类型为「支出」且一级分类为「付费卡券」的花费。这笔金额在表里是负数，扣除时用绝对值
 
-To learn more about Next.js, take a look at the following resources:
+转账优惠已经记在「优惠」列里，不再单独相加。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 页面
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **账单统计**：按月展示优惠。顶栏可以切换账单里出现过的月份，默认是最近的一个月。
+- **设置**：查看当前导入的文件，更换文件，或清除页面里的数据。清除不会删除原始文件。
